@@ -1,6 +1,10 @@
 from construct import Struct, Const, Enum, Byte, Bytes, Flag, Int8ul, this, Int32ul, Int64ul, \
     Int32sl, Int64sl, Double, Single, LazyBound, Array, Switch, Pass, BitStruct, BitsInteger, Adapter
 
+
+class LuaDecodeException(Exception): pass
+
+
 LuaInt = None
 LuaSize_t = None
 LuaNumber = None
@@ -182,26 +186,26 @@ def lua_type_define(head):
     elif head.size_int == 8:
         LuaInt = Int64sl
     else:
-        Exception("Unsupported size int")
+        LuaDecodeException("Unsupported size int")
 
     if head.size_size_t == 4:
         LuaSize_t = Int32ul
     elif head.size_size_t == 8:
         LuaSize_t = Int64ul
     else:
-        Exception("Unsupported size int")
+        LuaDecodeException("Unsupported size int")
 
     if head.size_lua_number == 8:
         LuaNumber = Double
     elif head.size_lua_number == 4:
         LuaNumber = Single
     else:
-        Exception("Unsupported size int")
+        LuaDecodeException("Unsupported size int")
 
     if head.size_instruction == 4:
         LuaInstruction = Int32ul
     else:
-        Exception("Unsupported size int")
+        LuaDecodeException("Unsupported size int")
 
 
 if __name__ == '__main__':
