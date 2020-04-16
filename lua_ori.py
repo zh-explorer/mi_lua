@@ -1,6 +1,5 @@
-from construct import Struct, Const, Enum, Byte, Bytes, Flag, Int8ul, this, PaddedString, Prefixed, Int32ul, Int64ul, \
-    Int32sl, Int64sl, Double, Single, LazyStruct, IfThenElse, LazyBound, If, Probe, PascalString, Array, Switch, Pass, \
-    Error, BitStruct, BitsInteger, RestreamData, ByteSwapped, Adapter
+from construct import Struct, Const, Enum, Byte, Bytes, Flag, Int8ul, this, Int32ul, Int64ul, \
+    Int32sl, Int64sl, Double, Single, LazyBound, Array, Switch, Pass, BitStruct, BitsInteger, Adapter
 
 LuaInt = None
 LuaSize_t = None
