@@ -1,0 +1,393 @@
+//------------------------------------------------
+//--- 010 Editor v10.0.1 Binary Template
+//
+//      File: luac51.bt
+//   Authors: explorer
+//   Version: 1.0
+//   Purpose: for luac 5.1
+//  Category: Programming
+// File Mask: *.luac
+//  ID Bytes: 1B 4c 75 61
+//   History: 1.0   
+//            exp: Initial version, support lua 5.1.
+//------------------------------------------------
+
+typedef uint64 size_t;
+typedef uint32 Instruction;
+
+struct Protos;
+struct Inst;
+
+typedef struct{
+    size_t str_size;
+    char str[str_size];
+}String<optimize=false, read=StrRead, write=StrWrite>;
+
+void StrWrite(String &s, string str) {
+    s.str_size = strlen(str);
+    s.str = str;
+}
+string StrRead(String &s){
+    if (s.str_size == 0) {
+        return "";    
+    }
+    return s.str;
+}
+
+//----------------------- struct for luac -----------------------
+
+typedef enum <uchar> {
+    lua51 = 0x51,
+    lua52 = 0x52,
+    lua53 = 0x53,
+}Version;
+
+typedef enum<uchar> {
+    LUA_TNIL = 0,
+    LUA_TBOOLEAN = 1,
+    LUA_TLIGHTUSERDATA = 2,
+    LUA_TNUMBER = 3,
+    LUA_TSTRING = 4,
+    LUA_TTABLE = 5,
+    LUA_TFUNCTION = 6,
+    LUA_TUSERDATA = 7,
+    LUA_TTHREAD = 8,
+}LUA_DATATYPE;
+
+typedef enum <uchar> {
+    official = 0
+}Format;
+
+typedef enum <uchar> {
+    LittleEndian = 1,
+    BigEndian = 0,
+}Endian;
+
+typedef struct {
+    uint32 linedefined;
+    uint32 lastlinedefined;
+    uchar nups /* number of upvalues */;
+    uchar numparams;
+    uchar is_vararg;
+    uchar maxstacksize;
+} ProtoHeader;
+
+typedef struct{
+    uint32 sizecode;
+    Inst inst[sizecode];
+}Code;
+
+typedef struct {
+    LUA_DATATYPE const_type;
+    if (const_type == LUA_TNIL){
+    }else if (const_type == LUA_TBOOLEAN) {
+        uchar tboolen;    
+    }else if (const_type == LUA_TNUMBER) {
+        double tnumber;
+    }else if (const_type == LUA_TSTRING) {
+        String tstring;
+    }else {
+        Warning("error, datatype unknown");
+        Exit(1);
+    }
+}Constant <read=ConstantRead>;
+
+typedef struct {
+    uint32 sizek;
+    Constant constant[sizek] <optimize=false>;
+}Constants;
+
+typedef struct {
+    uint32 sizelineinfo;
+    uchar lineinfo[sizelineinfo*4];
+}LineInfo;
+
+typedef struct {
+    String varname;
+    uint32 startpc;
+    uint32 endpc;
+}LocVar <read=LocVarRead>;
+
+typedef struct {
+    uint32 sizelocvars;
+    LocVar vars[sizelocvars] <optimize=false>;
+}LocVars;
+
+typedef struct{
+    uint32 sizeupvalues;
+    String upvalues[sizeupvalues];
+}UpValues;
+
+
+typedef struct {
+    String source;    
+
+    //header
+    ProtoHeader header;
+    //code
+    Code code;
+    // constants
+    Constants constants;
+    // functions
+    Protos protos;
+
+    // lines
+    LineInfo lines;
+    
+    // locals
+    LocVars locvars;
+
+    // upvalue names
+    UpValues values;
+
+    lua_disassemble(this);
+} Proto;
+
+typedef struct {
+    uint32 sizep;
+    Proto proto[sizep] <optimize=false>;
+}Protos;
+
+typedef struct {
+    char signature[4];   //".lua"
+    Version version <format=hex>;
+    Format format;
+    Endian endian;
+    uchar size_int <comment="sizeof(int)">;
+    uchar size_size_t <comment = "sizeof(size_t)">;
+    uchar size_Instruction <comment = "sizeof(Instruction)">;
+    uchar size_lua_Number <comment = "sizeof(lua_Number)">;
+    uchar lua_num_valid <comment = "Determine lua_Number whether it works or not, It's usually 0">;
+}GlobalHeader;
+
+//----------------------- function for luac -----------------------
+
+string ConstantRead(Constant &f) {
+    if (f.const_type == LUA_TNIL){
+        return "null";    
+    }else if (f.const_type == LUA_TBOOLEAN) {
+        if (f.tboolen == 0) {
+            return "(False)";
+        }else {
+            return "(True)";
+        }
+    }else if (f.const_type == LUA_TNUMBER) {
+        string s;
+        SPrintf(s, "%lf", f.tnumber);
+        return s;
+    }else if(f.const_type == LUA_TSTRING) {
+        return f.tstring.str;
+    }
+}
+
+string LocVarRead(LocVar &f) {
+    string s;
+    SPrintf(s, "%s (%d:%d)", f.varname.str, f.startpc, f.endpc);
+    return s;
+}
+
+//----------------------- struct for disassemble -----------------------
+
+typedef struct{
+    uint32 i;
+    local uint32 pc;
+    local string line;
+    local string lend;
+}Inst <read = InstRead, optimize=false>;
+
+typedef enum {
+/*----------------------------------------------------------------------
+name		args	description
+------------------------------------------------------------------------*/
+OP_MOVE,/*	A B	R(A) := R(B)					*/
+OP_LOADK,/*	A Bx	R(A) := Kst(Bx)					*/
+OP_LOADBOOL,/*	A B C	R(A) := (Bool)B; if (C) pc++			*/
+OP_LOADNIL,/*	A B	R(A) := ... := R(B) := nil			*/
+OP_GETUPVAL,/*	A B	R(A) := UpValue[B]				*/
+
+OP_GETGLOBAL,/*	A Bx	R(A) := Gbl[Kst(Bx)]				*/
+OP_GETTABLE,/*	A B C	R(A) := R(B)[RK(C)]				*/
+
+OP_SETGLOBAL,/*	A Bx	Gbl[Kst(Bx)] := R(A)				*/
+OP_SETUPVAL,/*	A B	UpValue[B] := R(A)				*/
+OP_SETTABLE,/*	A B C	R(A)[RK(B)] := RK(C)				*/
+
+OP_NEWTABLE,/*	A B C	R(A) := {} (size = B,C)				*/
+
+OP_SELF,/*	A B C	R(A+1) := R(B); R(A) := R(B)[RK(C)]		*/
+
+OP_ADD,/*	A B C	R(A) := RK(B) + RK(C)				*/
+OP_SUB,/*	A B C	R(A) := RK(B) - RK(C)				*/
+OP_MUL,/*	A B C	R(A) := RK(B) * RK(C)				*/
+OP_DIV,/*	A B C	R(A) := RK(B) / RK(C)				*/
+OP_MOD,/*	A B C	R(A) := RK(B) % RK(C)				*/
+OP_POW,/*	A B C	R(A) := RK(B) ^ RK(C)				*/
+OP_UNM,/*	A B	R(A) := -R(B)					*/
+OP_NOT,/*	A B	R(A) := not R(B)				*/
+OP_LEN,/*	A B	R(A) := length of R(B)				*/
+
+OP_CONCAT,/*	A B C	R(A) := R(B).. ... ..R(C)			*/
+
+OP_JMP,/*	sBx	pc+=sBx					*/
+
+OP_EQ,/*	A B C	if ((RK(B) == RK(C)) ~= A) then pc++		*/
+OP_LT,/*	A B C	if ((RK(B) <  RK(C)) ~= A) then pc++  		*/
+OP_LE,/*	A B C	if ((RK(B) <= RK(C)) ~= A) then pc++  		*/
+
+OP_TEST,/*	A C	if not (R(A) <=> C) then pc++			*/ 
+OP_TESTSET,/*	A B C	if (R(B) <=> C) then R(A) := R(B) else pc++	*/ 
+
+OP_CALL,/*	A B C	R(A), ... ,R(A+C-2) := R(A)(R(A+1), ... ,R(A+B-1)) */
+OP_TAILCALL,/*	A B C	return R(A)(R(A+1), ... ,R(A+B-1))		*/
+OP_RETURN,/*	A B	return R(A), ... ,R(A+B-2)	(see note)	*/
+
+OP_FORLOOP,/*	A sBx	R(A)+=R(A+2);
+			if R(A) <?= R(A+1) then { pc+=sBx; R(A+3)=R(A) }*/
+OP_FORPREP,/*	A sBx	R(A)-=R(A+2); pc+=sBx				*/
+
+OP_TFORLOOP,/*	A C	R(A+3), ... ,R(A+2+C) := R(A)(R(A+1), R(A+2)); 
+                        if R(A+3) ~= nil then R(A+2)=R(A+3) else pc++	*/ 
+OP_SETLIST,/*	A B C	R(A)[(C-1)*FPF+i] := R(A+i), 1 <= i <= B	*/
+
+OP_CLOSE,/*	A 	close all variables in the stack up to (>=) R(A)*/
+OP_CLOSURE,/*	A Bx	R(A) := closure(KPROTO[Bx], R(A), ... ,R(A+n))	*/
+
+OP_VARARG/*	A B	R(A), R(A+1), ..., R(A+B-1) = vararg		*/
+} OpCode;
+
+enum OpArgMask {
+  OpArgN,  /* argument is not used */
+  OpArgU,  /* argument is used */
+  OpArgR,  /* argument is a register or a jump offset */
+  OpArgK   /* argument is a constant or register/constant */
+};
+
+enum OpMode {iABC, iABx, iAsBx}; 
+
+#define NUM_OPCODES OP_VARARG
+
+local uchar luaP_opmodes[OP_VARARG + 1] = {
+/*       T  A    B       C     mode		   opcode	*/
+  opmode(0, 1, OpArgR, OpArgN, iABC) 		/* OP_MOVE */
+ ,opmode(0, 1, OpArgK, OpArgN, iABx)		/* OP_LOADK */
+ ,opmode(0, 1, OpArgU, OpArgU, iABC)		/* OP_LOADBOOL */
+ ,opmode(0, 1, OpArgR, OpArgN, iABC)		/* OP_LOADNIL */
+ ,opmode(0, 1, OpArgU, OpArgN, iABC)		/* OP_GETUPVAL */
+ ,opmode(0, 1, OpArgK, OpArgN, iABx)		/* OP_GETGLOBAL */
+ ,opmode(0, 1, OpArgR, OpArgK, iABC)		/* OP_GETTABLE */
+ ,opmode(0, 0, OpArgK, OpArgN, iABx)		/* OP_SETGLOBAL */
+ ,opmode(0, 0, OpArgU, OpArgN, iABC)		/* OP_SETUPVAL */
+ ,opmode(0, 0, OpArgK, OpArgK, iABC)		/* OP_SETTABLE */
+ ,opmode(0, 1, OpArgU, OpArgU, iABC)		/* OP_NEWTABLE */
+ ,opmode(0, 1, OpArgR, OpArgK, iABC)		/* OP_SELF */
+ ,opmode(0, 1, OpArgK, OpArgK, iABC)		/* OP_ADD */
+ ,opmode(0, 1, OpArgK, OpArgK, iABC)		/* OP_SUB */
+ ,opmode(0, 1, OpArgK, OpArgK, iABC)		/* OP_MUL */
+ ,opmode(0, 1, OpArgK, OpArgK, iABC)		/* OP_DIV */
+ ,opmode(0, 1, OpArgK, OpArgK, iABC)		/* OP_MOD */
+ ,opmode(0, 1, OpArgK, OpArgK, iABC)		/* OP_POW */
+ ,opmode(0, 1, OpArgR, OpArgN, iABC)		/* OP_UNM */
+ ,opmode(0, 1, OpArgR, OpArgN, iABC)		/* OP_NOT */
+ ,opmode(0, 1, OpArgR, OpArgN, iABC)		/* OP_LEN */
+ ,opmode(0, 1, OpArgR, OpArgR, iABC)		/* OP_CONCAT */
+ ,opmode(0, 0, OpArgR, OpArgN, iAsBx)		/* OP_JMP */
+ ,opmode(1, 0, OpArgK, OpArgK, iABC)		/* OP_EQ */
+ ,opmode(1, 0, OpArgK, OpArgK, iABC)		/* OP_LT */
+ ,opmode(1, 0, OpArgK, OpArgK, iABC)		/* OP_LE */
+ ,opmode(1, 1, OpArgR, OpArgU, iABC)		/* OP_TEST */
+ ,opmode(1, 1, OpArgR, OpArgU, iABC)		/* OP_TESTSET */
+ ,opmode(0, 1, OpArgU, OpArgU, iABC)		/* OP_CALL */
+ ,opmode(0, 1, OpArgU, OpArgU, iABC)		/* OP_TAILCALL */
+ ,opmode(0, 0, OpArgU, OpArgN, iABC)		/* OP_RETURN */
+ ,opmode(0, 1, OpArgR, OpArgN, iAsBx)		/* OP_FORLOOP */
+ ,opmode(0, 1, OpArgR, OpArgN, iAsBx)		/* OP_FORPREP */
+ ,opmode(1, 0, OpArgN, OpArgU, iABC)		/* OP_TFORLOOP */
+ ,opmode(0, 0, OpArgU, OpArgU, iABC)		/* OP_SETLIST */
+ ,opmode(0, 0, OpArgN, OpArgN, iABC)		/* OP_CLOSE */
+ ,opmode(0, 1, OpArgU, OpArgN, iABx)		/* OP_CLOSURE */
+ ,opmode(0, 1, OpArgU, OpArgN, iABC)		/* OP_VARARG */
+};
+
+#define SIZE_C		9
+#define SIZE_B		9
+#define SIZE_Bx		(SIZE_C + SIZE_B)
+#define SIZE_A		8
+
+#define SIZE_OP		6
+
+#define POS_OP		0
+#define POS_A		(POS_OP + SIZE_OP)
+#define POS_C		(POS_A + SIZE_A)
+#define POS_B		(POS_C + SIZE_C)
+#define POS_Bx		POS_C
+
+#define MAXARG_Bx        ((1<<SIZE_Bx)-1)
+#define MAXARG_sBx        (MAXARG_Bx>>1)         /* `sBx' is signed */
+
+//----------------------- function for disassemble -----------------------
+
+//#define MASK1(n,p)	((~((~(Instruction)0)<<n))<<p)
+uint32 MASK1(int n, int p) {
+    return ((~((~(Instruction)0)<<n))<<p);
+}
+
+//#define GET_OPCODE(i)	(cast(OpCode, ((i)>>POS_OP) & MASK1(SIZE_OP,0)))
+uchar GET_OPCODE(uint32 inst) {
+    return ((inst)>>POS_OP) & MASK1(SIZE_OP,0);
+}
+
+//#define GETARG_A(i)	(cast(int, ((i)>>POS_A) & MASK1(SIZE_A,0)))
+uint32 GETARG_A(uint32 inst){
+    return (int)(inst>>POS_A) & MASK1(SIZE_A,0);
+}	
+
+//#define GETARG_B(i)	(cast(int, ((i)>>POS_B) & MASK1(SIZE_B,0)))
+uint32 GETARG_B(uint32 inst){
+    return (int)(inst>>POS_B) & MASK1(SIZE_B,0);
+}
+
+//#define GETARG_C(i)	(cast(int, ((i)>>POS_C) & MASK1(SIZE_C,0)))
+uint32 GETARG_C(uint32 inst){
+    return (int)(inst>>POS_C) & MASK1(SIZE_C,0);
+}
+
+//#define GETARG_Bx(i)	(cast(int, ((i)>>POS_Bx) & MASK1(SIZE_Bx,0)))
+uint32 GETARG_Bx(uint32 inst){
+    return (int)(inst>>POS_Bx) & MASK1(SIZE_Bx,0);
+}
+
+//#define GETARG_sBx(i)	(GETARG_Bx(i)-MAXARG_sBx)
+int32 GETARG_sBx(uint32 inst) {
+    return GETARG_Bx(inst) - MAXARG_sBx;
+}
+
+uchar opmode(int t,int a,int b,int c,int m){
+    return (((t)<<7) | ((a)<<6) | ((b)<<4) | ((c)<<2) | (m));
+}
+
+string InstRead(Inst &f) {
+    local string s;
+    SPrintf(s, "[%d] %-9s %-13s; %s\n", f.pc, get_opcode_str(GET_OPCODE(f.i)), f.line, f.lend);
+    return s;
+}
+
+string get_opcode_str(OpCode o) {
+    string str = EnumToString(o);
+    str = SubStr(str, 3);
+    return str;
+}
+
+void lua_disassemble(Proto & p) {
+    local int pc;
+    for(pc=0; pc < p.code.sizecode; pc++) {
+        p.code.inst[pc].pc = pc;
+
+    }
+}
+
+//-------------------- main decode -----------------
+LittleEndian();
+
+GlobalHeader head;
+
+Proto top_proto;
