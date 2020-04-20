@@ -1,5 +1,5 @@
 from construct import Struct, Const, Enum, Byte, Bytes, Flag, Int8ul, this, Int32ul, Int64ul, \
-    Int32sl, Int64sl, Double, Single, LazyBound, Array, Switch, Pass, BitStruct, BitsInteger, Adapter
+    Int32sl, Int64sl, Float32l, Float64l, LazyBound, Array, Switch, Pass, BitStruct, BitsInteger, Adapter
 
 
 class LuaDecodeException(Exception): pass
@@ -196,9 +196,9 @@ def lua_type_define(head):
         LuaDecodeException("Unsupported size int")
 
     if head.size_lua_number == 8:
-        LuaNumber = Double
+        LuaNumber = Float64l
     elif head.size_lua_number == 4:
-        LuaNumber = Single
+        LuaNumber = Float32l
     else:
         LuaDecodeException("Unsupported size int")
 
