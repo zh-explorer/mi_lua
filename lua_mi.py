@@ -189,7 +189,7 @@ class ConstantAdapter(Adapter):
 Constant = ConstantAdapter(Struct(
     "data_type" / LuaDatatypeAdapter(Byte),
     "data" / Switch(this.data_type,
-                    {"LUA_INIL": Pass, "LUA_TBOOLEAN": Flag,
+                    {"LUA_TNIL": Pass, "LUA_TBOOLEAN": Flag,
                      "LUA_TNUMBER": LazyBound(lambda: LuaNumber), "LUA_TSTRING": String, "LUA_MIDATA": Int32ul})
 ))
 
